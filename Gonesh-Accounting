@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>حسابداری گونش</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;700;900&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<meta name="theme-color" content="#b8860b">
+<style>
+:root{
+  --bg:#f4f5f7; --card:#ffffff; --text:#1c1e21; --muted:#6b7280; --line:#e5e7eb;
+  --accent:#b8860b; --accent2:#8a6d10; --danger:#c0392b; --ok:#1e8e5a;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){--bg:#15171a;--card:#1e2125;--text:#eef0f2;--muted:#9aa0a8;--line:#2c3036;}
+}
+:root[data-theme="dark"]{--bg:#15171a;--card:#1e2125;--text:#eef0f2;--muted:#9aa0a8;--line:#2c3036;}
+*{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px);height:100%}
+body{margin:0;font-family:'Vazirmatn',system-ui,sans-serif;background:var(--bg);color:var(--text);height:100%;padding-bottom:70px}
+header{position:sticky;top:0;padding:calc(12px + env(safe-area-inset-top,0px)) 16px 12px;background:var(--card);border-bottom:1px solid var(--line);z-index:10;display:flex;align-items:center;justify-content:space-between}
+header h1{font-size:16px;margin:0;font-weight:700}
+header small{color:var(--muted);font-size:11px}
+nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:var(--card);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px);z-index:10}
+nav button{flex:1;padding:10px 2px;background:none;border:none;color:var(--muted);font-family:inherit;font-size:11px;cursor:pointer}
+nav button.active{color:var(--accent);font-weight:700}
+main{padding:14px;max-width:640px;margin:0 auto}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px}
+.card h2{font-size:14px;margin:0 0 10px}
+.row{display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap}
+.row>*{flex:1;min-width:90px}
+label{font-size:12px;color:var(--muted);display:block;margin-bottom:3px}
+input,select,textarea{width:100%;padding:9px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--text);font-family:inherit;font-size:13px}
+button.btn{padding:10px 14px;border:none;border-radius:8px;background:var(--accent);color:#fff;font-family:inherit;font-weight:700;cursor:pointer;font-size:13px}
+button.btn.secondary{background:var(--line);color:var(--text)}
+button.btn.danger{background:var(--danger)}
+button.btn.sm{padding:5px 10px;font-size:11px}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th,td{padding:6px 4px;border-bottom:1px solid var(--line);text-align:center}
+th{color:var(--muted);font-weight:600}
+.list-item{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--line);cursor:pointer}
+.list-item:last-child{border-bottom:none}
+.badge{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:2px 8px;font-size:11px}
+.debt{color:var(--danger);font-weight:700}
+.credit{color:var(--ok);font-weight:700}
+.hidden{display:none!important}
+.total-line{display:flex;justify-content:space-between;padding:4px 0;font-size:13px}
+.total-line b{font-size:15px}
+#toast{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);background:var(--accent);color:#fff;padding:8px 16px;border-radius:20px;font-size:12px;opacity:0;transition:.3s;z-index:99}
+img.thumb{max-width:100%;border-radius:8px;margin-top:6px}
+@media print{
+  body *{visibility:hidden}
+  #printArea,#printArea *{visibility:visible}
+  #printArea{position:absolute;top:0;right:0;width:100%}
+  @page{size:A5;margin:10mm}
+}
+</style>
+</head>
+<body>
+<header><h1>🧮 حسابداری گونش<br><small>صنایع آلومینیومی گونش</small></h1></header>
+<main id="app"></main>
+<nav>
+  <button data-tab="dash" class="active">داشبورد</button>
+  <button data-tab="customers">مشتریان</button>
+  <button data-tab="newinv">فاکتور جدید</button>
+  <button data-tab="invoices">فاکتورها</button>
+  <button data-tab="products">محصولات</button>
+</nav>
+<div id="toast"></div>
+<div id="printArea" style="display:none"></div>
+
+<script>
+const $=s=>document.querySelector(s), $$=s=>document.querySelectorAll(s);
+function load(k,d){try{return JSON.parse(localStorage.getItem(k))??d}catch(e){return d}}
+function save(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){toast('خطا در ذخیره‌سازی (فضا پر شده)')}}
+function toast(m){const t=$('#toast');t.textContent=m;t.style.opacity=1;setTimeout(()=>t.style.opacity=0,1800)}
+function fmt(n){return Number(n||0).toLocaleString('en-US')}
+function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,6)}
+
+/* ---------- FIX #2: تبدیل ارقام فارسی/عربی به انگلیسی ---------- */
+function faToEnDigits(str){
+  return String(str)
+    .replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d))
+    .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d));
+}
+function numVal(v){
+  v = faToEnDigits(v);
+  return Number(String(v||'').replace(/[^\d]/g,''))||0;
+}
+function attachComma(el){
+  el.setAttribute('inputmode','numeric');
+  el.addEventListener('input',()=>{
+    const digits = faToEnDigits(el.value).replace(/[^\d]/g,'');
+    el.value = digits ? Number(digits).toLocaleString('en-US') : '';
+  });
+}
+
+const JMONTHS=['فروردین','اردیبهشت','خرداد','تیر','مرداد','شهریور','مهر','آبان','آذر','دی','بهمن','اسفند'];
+function toJalali(gy,gm,gd){
+  var g_d_m=[0,31,59,90,120,151,181,212,243,273,304,334];
+  var jy=(gy<=1600)?0:979; gy-=(gy<=1600)?621:1600;
+  var gy2=(gm>2)?(gy+1):gy;
+  var days=365*gy+parseInt((gy2+3)/4)-parseInt((gy2+99)/100)+parseInt((gy2+399)/400)-80+gd+g_d_m[gm-1];
+  jy+=33*parseInt(days/12053); days%=12053;
+  jy+=4*parseInt(days/1461); days%=1461;
+  if(days>365){ jy+=parseInt((days-1)/365); days=(days-1)%365; }
+  var jm=(days<186)?1+parseInt(days/31):7+parseInt((days-186)/30);
+  var jd=1+((days<186)?(days%31):((days-186)%30));
+  return [jy,jm,jd];
+}
+function todayJalali(){const d=new Date(); return toJalali(d.getFullYear(),d.getMonth()+1,d.getDate());}
+function jalaliPickerHTML(id){
+  const [jy,jm,jd]=todayJalali();
+  let yOpts=''; for(let y=jy-1;y<=jy+2;y++) yOpts+=`<option value="${y}" ${y===jy?'selected':''}>${y}</option>`;
+  let mOpts=JMONTHS.map((m,i)=>`<option value="${i+1}" ${i+1===jm?'selected':''}>${m}</option>`).join('');
+  let dOpts=''; for(let d=1;d<=31;d++) dOpts+=`<option value="${d}" ${d===jd?'selected':''}>${d}</option>`;
+  return `<div class="row"><select id="${id}_y">${yOpts}</select><select id="${id}_m">${mOpts}</select><select id="${id}_d">${dOpts}</select></div>`;
+}
+function readJalali(id){
+  const y=$('#'+id+'_y').value, m=String($('#'+id+'_m').value).padStart(2,'0'), d=String($('#'+id+'_d').value).padStart(2,'0');
+  return `${y}/${m}/${d}`;
+}
+
+const LABELS={K:'کنج',W:'وسط',KS:'کنج صفحه‌ای',WS:'وسط صفحه‌ای',P:'پنل (جاحوله)',R:'رومیزی'};
+const HASLAYER={K:1,W:1,KS:1,WS:1,P:0,R:0};
+const CARTON=load('carton',{K:8,W:8,KS:8,WS:8,P:4,R:1});
+const COLORLABEL={T:'طلایی',AL:'نقره‌ای',S:'سفید',M:'مشکی'};
+const COLORGROUP={T:'TAL',AL:'TAL',S:'SM',M:'SM'};
+let PRICE=load('price',{
+ K:{3:{TAL:980000,SM:995000},2:{TAL:880000,SM:890000}},
+ W:{3:{TAL:980000,SM:995000},2:{TAL:880000,SM:890000}},
+ KS:{3:{TAL:1210000,SM:1230000},2:{TAL:1110000,SM:1120000}},
+ WS:{3:{TAL:1210000,SM:1230000},2:{TAL:1110000,SM:1120000}},
+ P:{TAL:960000,SM:975000},
+ R:{TAL:2020000,SM:2040000}
+});
+function priceOf(type,layer,color){
+  const g=COLORGROUP[color];
+  return HASLAYER[type]?PRICE[type][layer][g]:PRICE[type][g];
+}
+function codeOf(type,layer,color,qty,unit){
+  const base=(HASLAYER[type]?layer+'ط-':'')+color+'-';
+  return unit==='piece' ? base+qty+'عدد' : base+qty+'ک('+qty*CARTON[type]+')';
+}
+
+let customers=load('customers',[]);
+let invoices=load('invoices',[]);
+let curItems=[];
+let curChecks=[]; /* FIX #3: سراسری شد تا با curItems هماهنگ باشه */
+let curPhoto=null;
+
+function customerBalance(cid){
+  let bal=0;
+  invoices.filter(i=>i.customerId===cid).forEach(i=>{
+    const itemsTotal=i.items.reduce((s,x)=>s+x.total,0);
+    const paid=(i.pay.cash||0)+(i.pay.pos||0)+(i.pay.card||0)+i.pay.checks.reduce((s,c)=>s+c.amount,0);
+    bal+=itemsTotal-paid;
+  });
+  return bal;
+}
+
+function render(){
+  const tab=$('nav .active')?.dataset.tab||'dash';
+  const app=$('#app');
+  if(tab==='dash') return renderDash(app);
+  if(tab==='customers') return renderCustomers(app);
+  if(tab==='newinv') return renderNewInv(app);
+  if(tab==='invoices') return renderInvoices(app);
+  if(tab==='products') return renderProducts(app);
+}
+
+function renderDash(app){
+  const totalDebt=customers.reduce((s,c)=>s+Math.max(customerBalance(c.id),0),0);
+  const upcoming=[];
+  invoices.forEach(i=>i.pay.checks.forEach(c=>upcoming.push({...c,cust:customers.find(x=>x.id===i.customerId)?.name||'-'})));
+  upcoming.sort((a,b)=>a.dueDate.localeCompare(b.dueDate));
+  app.innerHTML=`
+  <div class="card"><h2>جمع مطالبات از مشتریان</h2><div class="total-line"><span>مجموع بدهی مشتریان</span><b class="debt">${fmt(totalDebt)} تومان</b></div></div>
+  <div class="card"><h2>چک‌های در پیش رو</h2>
+  ${upcoming.length?upcoming.map(c=>`<div class="list-item"><span>${c.cust} — ${c.bank||'بانک؟'}</span><span class="badge">${c.dueDate} · ${fmt(c.amount)}</span></div>`).join(''):'<p style="color:var(--muted);font-size:13px">چکی ثبت نشده</p>'}
+  </div>
+  <div class="card"><h2>مشتریان</h2><p style="font-size:13px;color:var(--muted)">${customers.length} مشتری ثبت‌شده — ${invoices.length} فاکتور</p></div>
+  <div class="card"><h2>پشتیبان‌گیری اطلاعات</h2>
+  <p style="font-size:12px;color:var(--muted)">حتماً هر چند وقت یک‌بار از اطلاعات خروجی بگیرید تا در صورت حذف برنامه، اطلاعات از بین نرود.</p>
+  <div class="row">
+  <button class="btn secondary sm" id="btnExport">خروجی گرفتن (Backup)</button>
+  <label class="btn secondary sm" style="text-align:center;cursor:pointer">
+    بازیابی از فایل
+    <input type="file" id="btnImport" accept="application/json" style="display:none">
+  </label>
+  </div></div>`;
+  $('#btnExport').onclick=exportBackup;
+  $('#btnImport').onchange=e=>{ if(e.target.files[0]) importBackup(e.target.files[0]); };
+}
+
+/* ---------- FIX #4: پشتیبان‌گیری ---------- */
+function exportBackup(){
+  const data={customers,invoices,price:PRICE,carton:CARTON,exportedAt:new Date().toISOString()};
+  const blob=new Blob([JSON.stringify(data)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='gonesh-backup-'+Date.now()+'.json';
+  a.click();
+  toast('فایل پشتیبان دانلود شد');
+}
+function importBackup(file){
+  const r=new FileReader();
+  r.onload=()=>{
+    try{
+      const data=JSON.parse(r.result);
+      if(!confirm('اطلاعات فعلی با فایل پشتیبان جایگزین می‌شود. ادامه می‌دهید؟')) return;
+      customers=data.customers||[];
+      invoices=data.invoices||[];
+      PRICE=data.price||PRICE;
+      Object.assign(CARTON,data.carton||{});
+      save('customers',customers); save('invoices',invoices); save('price',PRICE); save('carton',CARTON);
+      toast('بازیابی با موفقیت انجام شد');
+      render();
+    }catch(e){ toast('فایل پشتیبان نامعتبر است'); }
+  };
+  r.readAsText(file);
+}
+
+function renderCustomers(app){
+  app.innerHTML=`<div class="card"><h2>افزودن مشتری</h2>
+  <div class="row"><div><label>نام مشتری</label><input id="ncName" placeholder="مثلا آقای رضایی"></div><div><label>تلفن (اختیاری)</label><input id="ncPhone"></div></div>
+  <button class="btn" id="addCust">افزودن</button></div>
+  <div class="card"><h2>لیست مشتریان</h2><div id="custList"></div></div>`;
+  $('#addCust').onclick=()=>{
+    const name=$('#ncName').value.trim(); if(!name) return toast('نام را وارد کنید');
+    customers.push({id:uid(),name,phone:$('#ncPhone').value.trim()}); save('customers',customers); render();
+  };
+  const list=$('#custList');
+  list.innerHTML=customers.map(c=>{
+    const bal=customerBalance(c.id);
+    return `<div class="list-item" data-cust="${c.id}"><span>${c.name}</span><span class="${bal>0?'debt':'credit'}">${bal>0?fmt(bal)+' بدهکار':bal<0?fmt(-bal)+' بستانکار':'تسویه'}</span></div>`;
+  }).join('')||'<p style="color:var(--muted);font-size:13px">مشتری‌ای ثبت نشده</p>';
+  list.querySelectorAll('[data-cust]').forEach(el=>el.onclick=()=>renderCustomerDetail(el.dataset.cust));
+}
+
+function renderCustomerDetail(cid){
+  const c=customers.find(x=>x.id===cid);
+  const app=$('#app');
+  const list=invoices.filter(i=>i.customerId===cid).sort((a,b)=>b.date.localeCompare(a.date));
+  app.innerHTML=`<div class="card"><h2>${c.name} ${c.phone?'· '+c.phone:''}</h2>
+  <div class="total-line"><span>مانده حساب</span><b class="${customerBalance(cid)>0?'debt':'credit'}">${fmt(Math.abs(customerBalance(cid)))} تومان ${customerBalance(cid)>0?'بدهکار':'بستانکار'}</b></div>
+  <button class="btn secondary sm" id="backC">بازگشت</button></div>
+  ${list.map(i=>invoiceCard(i)).join('')||'<div class="card">فاکتوری ثبت نشده</div>'}`;
+  $('#backC').onclick=render;
+  attachInvoiceButtons();
+}
+
+function invoiceCard(i){
+  const itemsTotal=i.items.reduce((s,x)=>s+x.total,0);
+  const paid=(i.pay.cash||0)+(i.pay.pos||0)+(i.pay.card||0)+i.pay.checks.reduce((s,c)=>s+c.amount,0);
+  return `<div class="card">
+  <div class="total-line"><span>فاکتور ${i.date}</span><b>${fmt(itemsTotal)} تومان</b></div>
+  <table><tr><th>شرح</th><th>کد</th><th>مبلغ</th></tr>
+  ${i.items.map(x=>`<tr><td>${LABELS[x.type]}</td><td>${x.code}</td><td>${fmt(x.total)}</td></tr>`).join('')}
+  </table>
+  <div class="total-line"><span>پرداختی (نقد/پوز/کارت/چک)</span><span>${fmt(paid)}</span></div>
+  <div class="total-line"><span>مانده این فاکتور</span><b class="${itemsTotal-paid>0?'debt':'credit'}">${fmt(itemsTotal-paid)}</b></div>
+  ${i.pay.checks.length?'<p style="font-size:11px;color:var(--muted)">چک: '+i.pay.checks.map(c=>fmt(c.amount)+' سررسید '+c.dueDate).join(' | ')+'</p>':''}
+  ${i.photo?`<img class="thumb" src="${i.photo}">`:''}
+  <div class="row" style="margin-top:8px"><button class="btn secondary sm" data-print="${i.id}">پرینت / PDF (A5)</button> <button class="btn secondary sm" data-img="${i.id}">عکس فاکتور</button> <button class="btn danger sm" data-del="${i.id}">حذف</button></div>
+  </div>`;
+}
+
+function attachInvoiceButtons(){
+  $$('[data-print]').forEach(b=>b.onclick=()=>printInvoice(b.dataset.print));
+  $$('[data-img]').forEach(b=>b.onclick=()=>imageInvoice(b.dataset.img));
+  $$('[data-del]').forEach(b=>b.onclick=()=>{ if(confirm('حذف فاکتور؟')){invoices=invoices.filter(i=>i.id!==b.dataset.del); save('invoices',invoices); render();}});
+}
+
+function renderInvoices(app){
+  const list=[...invoices].sort((a,b)=>b.date.localeCompare(a.date));
+  app.innerHTML=`<div class="card"><h2>همه فاکتورها</h2></div>`+
+  (list.map(i=>{const cn=customers.find(c=>c.id===i.customerId)?.name||'?'; return `<div class="card"><div class="total-line"><span>${cn} — ${i.date}</span><b>${fmt(i.items.reduce((s,x)=>s+x.total,0))}</b></div><button class="btn secondary sm" data-print="${i.id}">پرینت</button> <button class="btn secondary sm" data-img="${i.id}">عکس</button> <button class="btn danger sm" data-del="${i.id}">حذف</button></div>`}).join('')||'<div class="card">فاکتوری ثبت نشده</div>');
+  attachInvoiceButtons();
+}
+
+function renderProducts(app){
+  let rows='';
+  Object.keys(LABELS).forEach(type=>{
+    if(HASLAYER[type]){
+      [3,2].forEach(layer=>{
+        rows+=`<tr><td>${LABELS[type]}</td><td>${layer}ط</td><td>T/AL</td><td><input class="pin" data-p="${type}.${layer}.TAL" value="${fmt(PRICE[type][layer].TAL)}"></td></tr>`;
+        rows+=`<tr><td>${LABELS[type]}</td><td>${layer}ط</td><td>S/M</td><td><input class="pin" data-p="${type}.${layer}.SM" value="${fmt(PRICE[type][layer].SM)}"></td></tr>`;
+      });
+    } else {
+      rows+=`<tr><td>${LABELS[type]}</td><td>-</td><td>T/AL</td><td><input class="pin" data-p="${type}._.TAL" value="${fmt(PRICE[type].TAL)}"></td></tr>`;
+      rows+=`<tr><td>${LABELS[type]}</td><td>-</td><td>S/M</td><td><input class="pin" data-p="${type}._.SM" value="${fmt(PRICE[type].SM)}"></td></tr>`;
+    }
+  });
+  app.innerHTML=`<div class="card"><h2>قیمت‌ها (تومان) — قابل ویرایش</h2>
+  <table><tr><th>محصول</th><th>طبقه</th><th>رنگ</th><th>قیمت هر عدد</th></tr>${rows}</table>
+  <p style="font-size:11px;color:var(--muted);margin-top:8px">تعداد در کارتن: کنج/وسط/صفحه‌ای = ۸ | پنل = ۴ | رومیزی = ۱ — قیمت کارتن خودکار از ضرب قیمت عدد × تعداد کارتن محاسبه می‌شود</p>
+  <div class="row"><div><label>تعداد رومیزی در هر کارتن</label><input id="rCarton" value="${CARTON.R}"></div></div>
+  <button class="btn" id="saveP">ذخیره تغییرات</button></div>`;
+  $$('.pin').forEach(attachComma);
+  $('#saveP').onclick=()=>{
+    $$('[data-p]').forEach(inp=>{
+      const [t,l,g]=inp.dataset.p.split('.'); const v=numVal(inp.value);
+      if(l==='_') PRICE[t][g]=v; else PRICE[t][l][g]=v;
+    });
+    CARTON.R=numVal($('#rCarton').value)||1;
+    save('price',PRICE); save('carton',CARTON); toast('ذخیره شد');
+  };
+}
+
+function renderNewInv(app){
+  if(!customers.length){ app.innerHTML='<div class="card">ابتدا از تب «مشتریان» یک مشتری اضافه کنید.</div>'; return; }
+  app.innerHTML=`<div class="card"><h2>فاکتور جدید</h2>
+  <div class="row"><div><label>مشتری</label><select id="ivCust">${customers.map(c=>`<option value="${c.id}">${c.name}</option>`).join('')}</select></div></div>
+  <label>تاریخ (شمسی)</label>${jalaliPickerHTML('ivDate')}</div>
+
+  <div class="card"><h2>افزودن ردیف</h2>
+  <div class="row">
+  <div><label>محصول</label><select id="itType">${Object.entries(LABELS).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select></div>
+  <div id="layerWrap"><label>طبقه</label><select id="itLayer"><option value="3">۳ طبقه</option><option value="2">۲ طبقه</option></select></div>
+  <div><label>رنگ</label><select id="itColor">${Object.entries(COLORLABEL).map(([k,v])=>`<option value="${k}">${v} (${k})</option>`).join('')}</select></div>
+  </div>
+  <div class="row">
+  <div><label>واحد فروش</label><select id="itUnit"><option value="carton">کارتن</option><option value="piece">عدد (کمتر از یک کارتن)</option></select></div>
+  <div><label id="qtyLabel">تعداد کارتن</label><input id="itQty" type="number" value="1" min="1"></div>
+  </div>
+  <div class="total-line"><span>قیمت واحد</span><span id="unitPreview">-</span></div>
+  <button class="btn secondary" id="addItem">افزودن ردیف به فاکتور</button></div>
+
+  <div class="card"><h2>اقلام فاکتور</h2><table id="itemsTbl"><tr><th>شرح</th><th>کد</th><th>مبلغ</th><th></th></tr></table>
+  <div class="total-line" style="margin-top:8px"><span>جمع کل</span><b id="ivTotal">0</b></div></div>
+
+  <div class="card"><h2>پرداخت</h2>
+  <div class="row"><div><label>نقد</label><input class="pin" id="pCash" value="0"></div><div><label>پوز/کارتخوان</label><input class="pin" id="pPos" value="0"></div><div><label>کارت به کارت</label><input class="pin" id="pCard" value="0"></div></div>
+  <h2 style="margin-top:10px">چک‌ها</h2>
+  <div class="row"><div><label>مبلغ چک</label><input class="pin" id="cAmt"></div><div><label>بانک (اختیاری)</label><input id="cBank"></div></div>
+  <label>تاریخ سررسید (شمسی)</label>${jalaliPickerHTML('cDate')}
+  <button class="btn secondary sm" id="addCheck" style="margin-top:8px">افزودن چک</button>
+  <div id="checksList" style="margin-top:6px"></div></div>
+
+  <div class="card"><h2>عکس فاکتور دست‌نویس (مرجع)</h2><input type="file" id="ivPhoto" accept="image/*"></div>
+
+  <div class="card"><div class="total-line"><span>مانده این فاکتور</span><b id="ivRemain" class="debt">0</b></div>
+  <button class="btn" id="saveInv">ثبت فاکتور</button></div>`;
+
+  $$('.pin').forEach(attachComma);
+
+  /* FIX #3: از curChecks سراسری استفاده می‌کنیم تا با curItems هماهنگ باشه */
+  function updateUnit(){
+    const type=$('#itType').value, layer=$('#itLayer').value, color=$('#itColor').value, unit=$('#itUnit').value;
+    $('#layerWrap').classList.toggle('hidden',!HASLAYER[type]);
+    const piecePrice=priceOf(type,HASLAYER[type]?layer:null,color);
+    const price=unit==='piece'?piecePrice:piecePrice*CARTON[type];
+    $('#unitPreview').textContent=fmt(price)+' تومان '+(unit==='piece'?'(هر عدد)':'(هر کارتن، یعنی '+CARTON[type]+' عدد)');
+    $('#qtyLabel').textContent=unit==='piece'?'تعداد عدد':'تعداد کارتن';
+  }
+  $('#itType').onchange=updateUnit; $('#itLayer').onchange=updateUnit; $('#itColor').onchange=updateUnit; $('#itUnit').onchange=updateUnit; updateUnit();
+
+  function refreshItems(){
+    const tbl=$('#itemsTbl');
+    tbl.innerHTML='<tr><th>شرح</th><th>کد</th><th>مبلغ</th><th></th></tr>'+
+    curItems.map((x,idx)=>`<tr><td>${LABELS[x.type]}</td><td>${x.code}</td><td>${fmt(x.total)}</td><td><button class="btn danger sm" data-rm="${idx}">×</button></td></tr>`).join('');
+    tbl.querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{curItems.splice(Number(b.dataset.rm),1); refreshItems();});
+    const total=curItems.reduce((s,x)=>s+x.total,0);
+    $('#ivTotal').textContent=fmt(total)+' تومان';
+    updateRemain();
+  }
+  function updateRemain(){
+    const total=curItems.reduce((s,x)=>s+x.total,0);
+    const paid=numVal($('#pCash').value)+numVal($('#pPos').value)+numVal($('#pCard').value)+curChecks.reduce((s,c)=>s+c.amount,0);
+    $('#ivRemain').textContent=fmt(total-paid)+' تومان';
+  }
+  ['pCash','pPos','pCard'].forEach(id=>$('#'+id).addEventListener('input',updateRemain));
+
+  $('#addItem').onclick=()=>{
+    const type=$('#itType').value, layer=Number($('#itLayer').value), color=$('#itColor').value, unit=$('#itUnit').value, qty=numVal($('#itQty').value)||1;
+    const piecePrice=priceOf(type,HASLAYER[type]?layer:null,color);
+    const unitPrice=unit==='piece'?piecePrice:piecePrice*CARTON[type];
+    curItems.push({type,layer,color,unit,qty,unitPrice,total:unitPrice*qty,code:codeOf(type,layer,color,qty,unit)});
+    refreshItems();
+  };
+  function renderChecksList(){
+    $('#checksList').innerHTML=curChecks.map((c,i)=>`<div class="list-item"><span>${fmt(c.amount)} — ${c.dueDate} ${c.bank?'('+c.bank+')':''}</span><button class="btn danger sm" data-rc="${i}">حذف</button></div>`).join('');
+    $$('[data-rc]').forEach(b=>b.onclick=()=>{curChecks.splice(Number(b.dataset.rc),1); renderChecksList();});
+    updateRemain();
+  }
+  $('#addCheck').onclick=()=>{
+    const amt=numVal($('#cAmt').value), due=readJalali('cDate');
+    if(!amt) return toast('مبلغ چک را وارد کنید');
+    curChecks.push({amount:amt,dueDate:due,bank:$('#cBank').value});
+    renderChecksList();
+    $('#cAmt').value=''; $('#cBank').value='';
+  };
+  $('#ivPhoto').onchange=e=>{
+    const f=e.target.files[0]; if(!f) return;
+    const r=new FileReader(); r.onload=()=>{curPhoto=r.result; toast('عکس ضمیمه شد');}; r.readAsDataURL(f);
+  };
+  $('#saveInv').onclick=()=>{
+    if(!curItems.length) return toast('حداقل یک ردیف اضافه کنید');
+    const inv={id:uid(),customerId:$('#ivCust').value,date:readJalali('ivDate'),items:curItems,
+      pay:{cash:numVal($('#pCash').value),pos:numVal($('#pPos').value),card:numVal($('#pCard').value),checks:curChecks},
+      photo:curPhoto};
+    invoices.push(inv); save('invoices',invoices);
+    curItems=[]; curChecks=[]; curPhoto=null; toast('فاکتور ثبت شد');
+    render();
+  };
+  refreshItems();
+  renderChecksList();
+}
+
+function invoiceHTML(id){
+  const i=invoices.find(x=>x.id===id); const c=customers.find(x=>x.id===i.customerId);
+  const itemsTotal=i.items.reduce((s,x)=>s+x.total,0);
+  const paid=(i.pay.cash||0)+(i.pay.pos||0)+(i.pay.card||0)+i.pay.checks.reduce((s,c)=>s+c.amount,0);
+  return `<div style="font-family:'Vazirmatn',sans-serif;direction:rtl;padding:10px;background:#fff;color:#000;width:380px">
+  <h2 style="text-align:center;margin:4px 0">صنایع آلومینیومی گونش</h2>
+  <p>مشتری: ${c.name} &nbsp; | &nbsp; تاریخ: ${i.date}</p>
+  <table style="width:100%;border-collapse:collapse;font-size:12px">
+  <tr style="border-bottom:1px solid #000"><th>شرح</th><th>کد</th><th>مبلغ (تومان)</th></tr>
+  ${i.items.map(x=>`<tr style="border-bottom:1px solid #ccc"><td>${LABELS[x.type]}</td><td>${x.code}</td><td>${fmt(x.total)}</td></tr>`).join('')}
+  </table>
+  <p style="margin-top:8px">جمع کل: ${fmt(itemsTotal)} | پرداختی: ${fmt(paid)} | مانده: ${fmt(itemsTotal-paid)}</p>
+  ${i.pay.checks.length ? '<p>چک‌ها: ' + i.pay.checks.map(c => fmt(c.amount) + ' سررسید ' + c.dueDate).join(' | ') + '</p>' : ''}
+  </div>`;
+}
+
+/* FIX #1: قبل از پرینت، دیو رو واقعاً نمایش می‌دیم و بعدش دوباره مخفی می‌کنیم */
+function printInvoice(id){
+  const area=$('#printArea');
+  area.innerHTML=invoiceHTML(id);
+  area.style.display='block';
+  window.print();
+  setTimeout(()=>{ area.style.display='none'; area.innerHTML=''; }, 500);
+}
+
+function imageInvoice(id){
+  if(typeof html2canvas==='undefined') return toast('کتابخانه عکس هنوز بارگذاری نشده، چند ثانیه صبر کن');
+  const holder=document.createElement('div');
+  holder.style.cssText='position:fixed;left:-9999px;top:0;';
+  holder.innerHTML=invoiceHTML(id);
+  document.body.appendChild(holder);
+  html2canvas(holder.firstElementChild,{scale:2,backgroundColor:'#fff'}).then(canvas=>{
+    document.body.removeChild(holder);
+    canvas.toBlob(blob=>{
+      const file=new File([blob],'faktor.png',{type:'image/png'});
+      if(navigator.canShare && navigator.canShare({files:[file]})){
+        navigator.share({files:[file],title:'فاکتور'}).catch(()=>{});
+      } else {
+        const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='faktor.png'; a.click();
+        toast('عکس فاکتور دانلود شد');
+      }
+    });
+  });
+}
+
+$$('nav button').forEach(b=>b.onclick=()=>{$$('nav button').forEach(x=>x.classList.remove('active')); b.classList.add('active'); render();});
+render();
+</script>
+</body>
+</html>
